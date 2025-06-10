@@ -3,52 +3,59 @@ import psutil
 import time
 import plotly.graph_objs as go
 
+
 st.set_page_config(layout="wide")
-st.title("🖥️ Real-Time CPU Performance Monitor")
+st.title("🖥️ Real-Time CPU Performance Monitor (1-Min Refresh)")
 
-st.markdown("Tracks CPU usage, temperature (Linux/Windows), and more in real-time.")
+st.markdown("Tracks CPU usage per core every 1 minute. Useful for observing long-term behavior under low/high load.")
 
-# Get CPU info
+# System Info
 cpu_count = psutil.cpu_count(logical=True)
 cpu_freq = psutil.cpu_freq()
+cpu_name = platform.processor()
 
-st.sidebar.subheader("System Info")
+st.sidebar.subheader("🧠 System Info")
 st.sidebar.write(f"Logical CPUs: {cpu_count}")
 st.sidebar.write(f"Base Frequency: {cpu_freq.min:.2f} MHz")
 st.sidebar.write(f"Max Frequency: {cpu_freq.max:.2f} MHz")
+st.sidebar.write(f"Processor: {cpu_name}")
 
-# Live plotting
+if "AMD" in cpu_name.upper():
+    st.sidebar.success("✅ AMD Processor Detected!")
+
+refresh_rate = 60  # <- Set to 60 seconds (1 minute)
+
+# For plotting
 cpu_usages = [[] for _ in range(cpu_count)]
 timestamps = []
-
 plot_placeholders = [st.empty() for _ in range(cpu_count)]
 
-refresh_rate = st.sidebar.slider("Refresh rate (seconds)", 0.1, 2.0, 0.5)
-
+# Live Loop
 while True:
     timestamp = time.strftime("%H:%M:%S")
     timestamps.append(timestamp)
+
     cpu_percentages = psutil.cpu_percent(percpu=True)
 
     for i in range(cpu_count):
         cpu_usages[i].append(cpu_percentages[i])
-        if len(cpu_usages[i]) > 50:
+        if len(cpu_usages[i]) > 60:  # Keep only last 60 minutes
             cpu_usages[i].pop(0)
 
-        graph = go.Figure()
-        graph.add_trace(go.Scatter(
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
             y=cpu_usages[i],
-            x=timestamps[-50:],
+            x=timestamps[-60:],
             mode='lines+markers',
             name=f'Core {i}',
             line=dict(shape='spline')
         ))
-        graph.update_layout(
+        fig.update_layout(
             title=f"Core {i} Usage",
             xaxis_title="Time",
             yaxis_title="Usage (%)",
             yaxis=dict(range=[0, 100])
         )
-        plot_placeholders[i].plotly_chart(graph, use_container_width=True)
+        plot_placeholders[i].plotly_chart(fig, use_container_width=True)
 
     time.sleep(refresh_rate)
